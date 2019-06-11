@@ -19,11 +19,12 @@ from typing import (
 from .queries import QueryLike
 from .storages import Storage
 from .utils import LRUCache
+from collections import OrderedDict
 
 __all__ = ('Document', 'Table')
 
 
-class Document(dict):
+class Document(OrderedDict):
     """
     A document stored in the database.
 
@@ -167,7 +168,7 @@ class Table:
             # By calling ``dict(document)`` we convert the data we got to a
             # ``dict`` instance even if it was a different class that
             # implemented the ``Mapping`` interface
-            table[doc_id] = dict(document)
+            table[doc_id] = OrderedDict(document)
 
         # See below for details on ``Table._update``
         self._update_table(updater)
@@ -203,7 +204,7 @@ class Table:
                     # skip the rest of the current loop
                     doc_id = document.doc_id
                     doc_ids.append(doc_id)
-                    table[doc_id] = dict(document)
+                    table[doc_id] = OrderedDict(document)
                     continue
 
                 # Generate new document ID for this document
@@ -211,7 +212,7 @@ class Table:
                 # later, then save the document with the new doc_id
                 doc_id = self._get_next_id()
                 doc_ids.append(doc_id)
-                table[doc_id] = dict(document)
+                table[doc_id] = OrderedDict(document)
 
         # See below for details on ``Table._update``
         self._update_table(updater)
@@ -672,7 +673,7 @@ class Table:
 
         return next_id
 
-    def _read_table(self) -> Dict[str, Mapping]:
+    def _read_table(self) -> OrderedDict[str, Mapping]:
         """
         Read the table data from the underlying storage.
 
@@ -686,18 +687,18 @@ class Table:
 
         if tables is None:
             # The database is empty
-            return {}
+            return OrderedDict()
 
         # Retrieve the current table's data
         try:
             table = tables[self.name]
         except KeyError:
             # The table does not exist yet, so it is empty
-            return {}
+            return OrderedDict()
 
         return table
 
-    def _update_table(self, updater: Callable[[Dict[int, Mapping]], None]):
+    def _update_table(self, updater: Callable[[OrderedDict[int, Mapping]], None]):
         """
         Perform a table update operation.
 
@@ -715,22 +716,22 @@ class Table:
 
         if tables is None:
             # The database is empty
-            tables = {}
+            tables = OrderedDict()
 
         try:
             raw_table = tables[self.name]
         except KeyError:
             # The table does not exist yet, so it is empty
-            raw_table = {}
+            raw_table = OrderedDict()
 
         # Convert the document IDs to the document ID class.
         # This is required as the rest of TinyDB expects the document IDs
         # to be an instance of ``self.document_id_class`` but the storage
         # might convert dict keys to strings.
-        table = {
+        table = OrderedDict({
             self.document_id_class(doc_id): doc
             for doc_id, doc in raw_table.items()
-        }
+        })
 
         # Perform the table update operation
         updater(table)
@@ -738,10 +739,10 @@ class Table:
         # Convert the document IDs back to strings.
         # This is required as some storages (most notably the JSON file format)
         # don't support IDs other than strings.
-        tables[self.name] = {
+        tables[self.name] = OrderedDict({
             str(doc_id): doc
             for doc_id, doc in table.items()
-        }
+        })
 
         # Write the newly updated data back to the storage
         self._storage.write(tables)
