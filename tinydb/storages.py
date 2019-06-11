@@ -89,6 +89,7 @@ class JSONStorage(Storage):
 
         super(JSONStorage, self).__init__()
         touch(path, create_dirs=create_dirs)  # Create file if not exists
+        self._jsonoph = kwargs.pop('object_pairs_hook', dict)
         self.kwargs = kwargs
         self._handle = codecs.open(path, 'r+', encoding=encoding)
 
@@ -105,7 +106,7 @@ class JSONStorage(Storage):
             return None
         else:
             self._handle.seek(0)
-            return json.load(self._handle)
+            return json.load(self._handle, object_pairs_hook=self._jsonoph)
 
     def write(self, data):
         self._handle.seek(0)

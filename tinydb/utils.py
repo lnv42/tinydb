@@ -7,8 +7,8 @@ from collections import OrderedDict
 from contextlib import contextmanager
 
 # Python 2/3 independant dict iteration
-iteritems = getattr(dict, 'iteritems', dict.items)
-itervalues = getattr(dict, 'itervalues', dict.values)
+iteritems = getattr(OrderedDict, 'iteritems', OrderedDict.items)
+itervalues = getattr(OrderedDict, 'itervalues', OrderedDict.values)
 
 
 class LRUCache:
@@ -111,7 +111,7 @@ def catch_warning(warning_cls):
         yield
 
 
-class FrozenDict(dict):
+class FrozenDict(OrderedDict):
     def __hash__(self):
         return hash(tuple(sorted(self.items())))
 
@@ -128,7 +128,7 @@ class FrozenDict(dict):
 
 
 def freeze(obj):
-    if isinstance(obj, dict):
+    if isinstance(obj, OrderedDict):
         return FrozenDict((k, freeze(v)) for k, v in obj.items())
     elif isinstance(obj, list):
         return tuple(freeze(el) for el in obj)

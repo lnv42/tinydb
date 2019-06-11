@@ -7,13 +7,14 @@ try:
     from collections.abc import Mapping
 except ImportError:
     from collections import Mapping
+from collections import OrderedDict
 import warnings
 
 from . import JSONStorage
 from .utils import LRUCache, iteritems, itervalues
 
 
-class Document(dict):
+class Document(OrderedDict):
     """
     Represents a document stored in the database.
 
@@ -23,8 +24,7 @@ class Document(dict):
 
     def __init__(self, value, doc_id, **kwargs):
         super(Document, self).__init__(**kwargs)
-
-        self.update(value)
+        self.update(list(value.items()))
         self.doc_id = doc_id
 
     @property
@@ -60,7 +60,7 @@ def _get_doc_ids(doc_ids, eids):
         return doc_ids
 
 
-class DataProxy(dict):
+class DataProxy(OrderedDict):
     """
     A proxy to a table's data that remembers the storage's
     data dictionary.
@@ -68,7 +68,7 @@ class DataProxy(dict):
 
     def __init__(self, table, raw_data, **kwargs):
         super(DataProxy, self).__init__(**kwargs)
-        self.update(table)
+        self.update(list(table.items()))
         self.raw_data = raw_data
 
 
@@ -95,9 +95,9 @@ class StorageProxy(object):
             raw_data.update({self._table_name: {}})
             self._storage.write(raw_data)
 
-            return DataProxy({}, raw_data)
+            return DataProxy(OrderedDict(), raw_data)
 
-        docs = {}
+        docs = OrderedDict()
         for key, val in iteritems(table):
             doc = self._new_document(key, val)
             docs[doc.doc_id] = doc
@@ -112,7 +112,7 @@ class StorageProxy(object):
             # Not a data proxy, fall back to regular reading
             raw_data = self._storage.read()
 
-        raw_data[self._table_name] = dict(data)
+        raw_data[self._table_name] = OrderedDict(data)
         self._storage.write(raw_data)
 
     def purge_table(self):
@@ -456,7 +456,7 @@ class Table(object):
 
         doc_id = self._get_doc_id(document)
         data = self._read()
-        data[doc_id] = dict(document)
+        data[doc_id] = OrderedDict(document)
         self._write(data)
 
         return doc_id
@@ -476,7 +476,7 @@ class Table(object):
             doc_id = self._get_doc_id(doc)
             doc_ids.append(doc_id)
 
-            data[doc_id] = dict(doc)
+            data[doc_id] = OrderedDict(doc)
 
         self._write(data)
 
@@ -557,7 +557,7 @@ class Table(object):
         # Document specified by ID
         documents.reverse()
         for doc_id in doc_ids:
-            data[doc_id] = dict(documents.pop())
+            data[doc_id] = OrderedDict(documents.pop())
 
         self._write(data)
 
