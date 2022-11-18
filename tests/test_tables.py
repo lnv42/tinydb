@@ -1,12 +1,21 @@
-import pytest
 import re
+
+import pytest
 
 from tinydb import where
 
 
+def test_next_id(db):
+    db.truncate()
+
+    assert db._get_next_id() == 1
+    assert db._get_next_id() == 2
+    assert db._get_next_id() == 3
+
+
 def test_tables_list(db):
-    db.table('table1')
-    db.table('table2')
+    db.table('table1').insert({'a': 1})
+    db.table('table2').insert({'a': 1})
 
     assert db.tables() == {'_default', 'table1', 'table2'}
 
@@ -33,7 +42,7 @@ def test_multiple_tables(db):
     assert table2.count(where('char') == 'b') == 1
     assert table3.count(where('char') == 'c') == 1
 
-    db.purge_tables()
+    db.drop_tables()
 
     assert len(table1) == 0
     assert len(table2) == 0
@@ -45,6 +54,45 @@ def test_caching(db):
     table2 = db.table('table1')
 
     assert table1 is table2
+
+
+def test_query_cache(db):
+    query1 = where('int') == 1
+
+    assert db.count(query1) == 3
+    assert query1 in db._query_cache
+
+    assert db.count(query1) == 3
+    assert query1 in db._query_cache
+
+    query2 = where('int') == 0
+
+    assert db.count(query2) == 0
+    assert query2 in db._query_cache
+
+    assert db.count(query2) == 0
+    assert query2 in db._query_cache
+
+
+def test_query_cache_with_mutable_callable(db):
+    table = db.table('table')
+    table.insert({'val': 5})
+
+    mutable = 5
+    increase = lambda x: x + mutable
+
+    assert where('val').is_cacheable()
+    assert not where('val').map(increase).is_cacheable()
+    assert not (where('val').map(increase) == 10).is_cacheable()
+
+    search = where('val').map(increase) == 10
+    assert table.count(search) == 1
+
+    # now `increase` would yield 15, not 10
+    mutable = 10
+
+    assert table.count(search) == 0
+    assert len(table._query_cache) == 0
 
 
 def test_zero_cache_size(db):
@@ -111,9 +159,13 @@ def test_table_name(db):
 def test_table_repr(db):
     name = 'table4'
     table = db.table(name)
-    print(repr(table))
 
     assert re.match(
         r"<Table name=\'table4\', total=0, "
-        "storage=<tinydb\.database\.StorageProxy object at [a-zA-Z0-9]+>>",
+        r"storage=<tinydb\.storages\.(MemoryStorage|JSONStorage) object at [a-zA-Z0-9]+>>",
         repr(table))
+
+
+def test_truncate_table(db):
+    db.truncate()
+    assert db._get_next_id() == 1
