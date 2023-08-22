@@ -9,6 +9,7 @@ import os
 import warnings
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
+from copy import copy
 
 __all__ = ('Storage', 'JSONStorage', 'MemoryStorage')
 
@@ -99,7 +100,8 @@ class JSONStorage(Storage):
         super().__init__()
 
         self._mode = access_mode
-        self.kwargs = kwargs
+        self.kwargs = copy(kwargs)
+        self._jsonoph = self.kwargs.pop('object_pairs_hook', dict)
 
         if access_mode not in ('r', 'rb', 'r+', 'rb+'):
             warnings.warn(
@@ -133,7 +135,7 @@ class JSONStorage(Storage):
             self._handle.seek(0)
 
             # Load the JSON contents of the file
-            return json.load(self._handle)
+            return json.load(self._handle, object_pairs_hook=self._jsonoph)
 
     def write(self, data: Dict[str, Dict[str, Any]]):
         # Move the cursor to the beginning of the file just in case

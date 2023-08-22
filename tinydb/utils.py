@@ -111,7 +111,7 @@ class LRUCache(abc.MutableMapping, Generic[K, V]):
                 self.cache.popitem(last=False)
 
 
-class FrozenDict(dict):
+class FrozenDict(OrderedDict):
     """
     An immutable dictionary.
 
@@ -145,7 +145,7 @@ def freeze(obj):
     """
     Freeze an object by making it immutable and thus hashable.
     """
-    if isinstance(obj, dict):
+    if isinstance(obj, OrderedDict) or isinstance(obj, dict):
         # Transform dicts into ``FrozenDict``s
         return FrozenDict((k, freeze(v)) for k, v in obj.items())
     elif isinstance(obj, list):
