@@ -1,7 +1,6 @@
-import warnings
 import pytest
 
-from tinydb.utils import LRUCache, catch_warning, freeze, FrozenDict
+from tinydb.utils import LRUCache, freeze, FrozenDict
 
 
 def test_lru_cache():
@@ -80,32 +79,13 @@ def test_lru_cache_unlimited_explicit():
     assert len(cache.lru) == 100
 
 
-def test_catch_warning():
-    class MyWarning(Warning):
-        pass
+def test_lru_cache_iteration_works():
+    cache = LRUCache()
+    count = 0
+    for _ in cache:
+        assert False, 'there should be no elements in the cache'
 
-    filters = warnings.filters[:]
-
-    with pytest.raises(MyWarning):
-        with catch_warning(MyWarning):
-            warnings.warn("message", MyWarning)
-
-    assert filters == warnings.filters
-
-
-def test_catch_warning_reset_filter():
-    class MyWarning(Warning):
-        pass
-
-    warnings.filterwarnings(action='once', category=MyWarning)
-
-    with pytest.raises(MyWarning):
-        with catch_warning(MyWarning):
-            warnings.warn("message", MyWarning)
-
-    filters = [f for f in warnings.filters if f[2] == MyWarning]
-    assert filters
-    assert filters[0][0] == 'once'
+    assert count == 0
 
 
 def test_freeze():
@@ -120,3 +100,9 @@ def test_freeze():
 
     with pytest.raises(TypeError):
         frozen[3]['a'] = 10
+
+    with pytest.raises(TypeError):
+        frozen[3].pop('a')
+
+    with pytest.raises(TypeError):
+        frozen[3].update({'a': 9})

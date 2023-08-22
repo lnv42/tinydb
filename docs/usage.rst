@@ -28,14 +28,6 @@ library like `pickle <http://docs.python.org/library/pickle.html>`_ or
    ``JSONStorage``) may result in unexpected behavior due to query caching.
    See query_caching_ on how to disable the query cache.
 
-Alternative JSON library
-........................
-
-As already mentioned, the default storage relies upon Python's
-JSON module. To improve performance, you can install
-`ujson <http://pypi.python.org/pypi/ujson>`_ , an extremely fast JSON
-implementation. TinyDB will auto-detect and use it if possible.
-
 Queries
 -------
 
@@ -53,12 +45,19 @@ which fields to check. Searching for nested fields is just as easy:
 >>> db.search(User.birthday.year == 1990)
 
 Not all fields can be accessed this way if the field name is not a valid Python
-identifier. In this case, you can switch to array indexing notation:
+identifier. In this case, you can switch to dict access notation:
 
 >>> # This would be invalid Python syntax:
 >>> db.search(User.country-code == 'foo')
 >>> # Use this instead:
 >>> db.search(User['country-code'] == 'foo')
+
+In addition, you can use arbitrary transform function where a field would be,
+for example:
+
+>>> from unidecode import unidecode
+>>> db.search(User.name.map(unidecode) == 'Jose')
+>>> # will match 'José' etc.
 
 The second, traditional way of constructing queries is as follows:
 
@@ -102,6 +101,17 @@ queries:
 >>>     return m <= val <= n
 >>> db.search(User.age.test(test_func, 0, 21))
 >>> db.search(User.age.test(test_func, 21, 99))
+
+Another case is if you have a ``dict`` where you want to find all documents
+that match this ``dict``. We call this searching for a fragment:
+
+>>> db.search(Query().fragment({'foo': True, 'bar': False}))
+[{'foo': True, 'bar': False, 'foobar: 'yes!'}]
+
+You also can search for documents where a specific field matches the fragment:
+
+>>> db.search(Query().field.fragment({'foo': True, 'bar': False}))
+[{'field': {'foo': True, 'bar': False, 'foobar: 'yes!'}]
 
 When a field contains a list, you also can use the ``any`` and ``all`` methods.
 There are two ways to use them: with lists of values and with nested queries.
@@ -241,13 +251,32 @@ your database.
 Inserting data
 ..............
 
-As already described you can insert an document using ``db.insert(...)``.
+As already described you can insert a document using ``db.insert(...)``.
 In case you want to insert multiple documents, you can use ``db.insert_multiple(...)``:
 
 >>> db.insert_multiple([
         {'name': 'John', 'age': 22},
         {'name': 'John', 'age': 37}])
 >>> db.insert_multiple({'int': 1, 'value': i} for i in range(2))
+
+Also in some cases it may be useful to specify the document ID yourself when
+inserting data. You can do that by using the :class:`~tinydb.table.Document`
+class:
+
+>>> db.insert(Document({'name': 'John', 'age': 22}, doc_id=12))
+12
+
+The same is possible when using ``db.insert_multiple(...)``:
+
+>>> db.insert_multiple([
+    Document({'name': 'John', 'age': 22}, doc_id=12),
+    Document({'name': 'Jane', 'age': 24}, doc_id=14),
+])
+[12, 14]
+
+.. note::
+    Inserting a ``Document`` with an ID that already exists will result
+    in a ``ValueError`` being raised.
 
 Updating data
 .............
@@ -258,7 +287,7 @@ can leave out the ``query`` argument:
 >>> db.update({'foo': 'bar'})
 
 When passing a dict to ``db.update(fields, query)``, it only allows you to
-update an document by adding or overwriting its values. But sometimes you may
+update a document by adding or overwriting its values. But sometimes you may
 need to e.g. remove one field or increment its value. In that case you can
 pass a function instead of ``fields``:
 
@@ -285,6 +314,21 @@ Of course you also can write your own operations:
 ...
 >>> db.update(your_operation(arguments), query)
 
+In order to perform multiple update operations at once, you can use the
+``update_multiple`` method like this:
+
+>>> db.update_multiple([
+...     ({'int': 2}, where('char') == 'a'),
+...     ({'int': 4}, where('char') == 'b'),
+... ])
+
+You also can use mix normal updates with update operations:
+
+>>> db.update_multiple([
+...     ({'int': 2}, where('char') == 'a'),
+...     ({delete('int'), where('char') == 'b'),
+... ])
+
 Data access and modification
 ----------------------------
 
@@ -302,6 +346,11 @@ document into the table:
 This will update all users with the name John to have ``logged-in`` set to ``True``.
 If no matching user is found, a new document is inserted with both the name set
 and the ``logged-in`` flag.
+
+To use the ID of the document as matching criterion a :class:`~tinydb.table.Document`
+with ``doc_id`` is passed instead of a query:
+
+>>> db.upsert(Document({'name': 'John', 'logged-in': True}, doc_id=12))
 
 Retrieving data
 ...............
@@ -347,27 +396,6 @@ In a similar manner you can look up the number of documents matching a query:
 >>> db.count(User.name == 'John')
 2
 
-Replacing data
-..............
-
-Another occasionally useful operation is to replace a list of documents. If you
-have a list of documents with IDs (see document_ids_), you can pass them to
-``db.write_back(list)``:
-
->>> docs = db.search(User.name == 'John')
-[{name: 'John', age: 12}, {name: 'John', age: 44}]
->>> for doc in docs:
-...     doc['name'] = 'Jane'
->>> db.write_back(docs)  # Will update the documents we retrieved
->>> docs = db.search(User.name == 'John')
-[]
->>> docs = db.search(User.name == 'Jane')
-[{name: 'Jane', age: 12}, {name: 'Jane', age: 44}]
-
-Alternatively you can pass a list of documents along with a list of document IDs
-to achieve the same goal. In this case, the length of the document list and the
-ID list has to be equal.
-
 Recap
 ^^^^^
 
@@ -381,8 +409,6 @@ Let's summarize the ways to handle data:
 | **Updating data**                                                                             |
 +-------------------------------+---------------------------------------------------------------+
 | ``db.update(operation, ...)`` | Update all matching documents with a special operation        |
-+-------------------------------+---------------------------------------------------------------+
-| ``db.write_back(docs)``       | Replace all documents with the updated versions               |
 +-------------------------------+---------------------------------------------------------------+
 | **Retrieving data**                                                                           |
 +-------------------------------+---------------------------------------------------------------+
@@ -406,7 +432,7 @@ Using Document IDs
 ------------------
 
 Internally TinyDB associates an ID with every document you insert. It's returned
-after inserting an document:
+after inserting a document:
 
 >>> db.insert({'name': 'John', 'age': 22})
 3
@@ -421,13 +447,16 @@ In addition you can get the ID of already inserted documents using
 3
 >>> el = db.all()[0]
 >>> el.doc_id
+1
+>>> el = db.all()[-1]
+>>> el.doc_id
 12
 
 Different TinyDB methods also work with IDs, namely: ``update``, ``remove``,
 ``contains`` and ``get``. The first two also return a list of affected IDs.
 
 >>> db.update({'value': 2}, doc_ids=[1, 2])
->>> db.contains(doc_ids=[1])
+>>> db.contains(doc_id=1)
 True
 >>> db.remove(doc_ids=[1, 2])
 >>> db.get(doc_id=3)
@@ -441,19 +470,19 @@ Recap
 Let's sum up the way TinyDB supports working with IDs:
 
 +-------------------------------------+------------------------------------------------------------+
-| **Getting an document's ID**                                                                     |
+| **Getting a document's ID**                                                                      |
 +-------------------------------------+------------------------------------------------------------+
 | ``db.insert(...)``                  | Returns the inserted document's ID                         |
 +-------------------------------------+------------------------------------------------------------+
 | ``db.insert_multiple(...)``         | Returns the inserted documents' ID                         |
 +-------------------------------------+------------------------------------------------------------+
-| ``document.doc_id``                 | Get the ID of an document fetched from the db              |
+| ``document.doc_id``                 | Get the ID of a document fetched from the db               |
 +-------------------------------------+------------------------------------------------------------+
 | **Working with IDs**                                                                             |
 +-------------------------------------+------------------------------------------------------------+
 | ``db.get(doc_id=...)``              | Get the document with the given ID                         |
 +-------------------------------------+------------------------------------------------------------+
-| ``db.contains(doc_ids=[...])``      | Check if the db contains documents with one of the given   |
+| ``db.contains(doc_id=...)``         | Check if the db contains a document with the given         |
 |                                     | IDs                                                        |
 +-------------------------------------+------------------------------------------------------------+
 | ``db.update({...}, doc_ids=[...])`` | Update all documents with the given IDs                    |
@@ -478,11 +507,11 @@ the ``TinyDB`` class. To create and use a table, use ``db.table(name)``.
 
 To remove a table from a database, use:
 
->>> db.purge_table('table_name')
+>>> db.drop_table('table_name')
 
 If on the other hand you want to remove all tables, use the counterpart:
 
->>> db.purge_tables()
+>>> db.drop_tables()
 
 Finally, you can get a list with the names of all tables in your database:
 
@@ -496,27 +525,43 @@ Default Table
 
 TinyDB uses a table named ``_default`` as the default table. All operations
 on the database object (like ``db.insert(...)``) operate on this table.
-The name of this table can be modified by either passing ``default_table``
-to the ``TinyDB`` constructor or by setting the ``DEFAULT_TABLE`` class
-variable to modify the default table name for all instances:
+The name of this table can be modified by setting the ``default_table_name``
+class variable to modify the default table name for all instances:
 
 >>> #1: for a single instance only
->>> TinyDB(storage=SomeStorage, default_table='my-default')
+>>> db = TinyDB(storage=SomeStorage)
+>>> db.default_table_name = 'my-default'
 >>> #2: for all instances
->>> TinyDB.DEFAULT_TABLE = 'my-default'
+>>> TinyDB.default_table_name = 'my-default'
 
 .. _query_caching:
 
 Query Caching
 .............
 
-TinyDB caches query result for performance. You can optimize the query cache
-size by passing the ``cache_size`` to the ``table(...)`` function:
+TinyDB caches query result for performance. That way re-running a query won't
+have to read the data from the storage as long as the database hasn't been
+modified. You can optimize the query cache size by passing the ``cache_size``
+to the ``table(...)`` function:
 
 >>> table = db.table('table_name', cache_size=30)
 
 .. hint:: You can set ``cache_size`` to ``None`` to make the cache unlimited in
    size. Also, you can set ``cache_size`` to 0 to disable it.
+
+.. hint:: It's not possible to open the same table multiple times with different
+   settings. After the first invocation, all the subsequent calls will return
+   the same table with the same settings as the first one.
+
+.. hint:: The TinyDB query cache doesn't check if the underlying storage
+   that the database uses has been modified by an external process. In this
+   case the query cache may return outdated results. To clear the cache and
+   read data from the storage again you can use ``db.clear_cache()``.
+
+.. hint:: When using an unlimited cache size and ``test()`` queries, TinyDB
+   will store a reference to the test function. As a result of that behavior
+   long-running applications that use ``lambda`` functions as a test function
+   may experience memory leaks.
 
 Storage & Middleware
 --------------------
@@ -547,9 +592,9 @@ To use the in-memory storage, use:
     >>> db = TinyDB('db.json', sort_keys=True, indent=4, separators=(',', ': '))
 
 To modify the default storage for all ``TinyDB`` instances, set the
-``DEFAULT_STORAGE`` class variable:
+``default_storage_class`` class variable:
 
->>> TinyDB.DEFAULT_STORAGE = MemoryStorage
+>>> TinyDB.default_storage_class = MemoryStorage
 
 In case you need to access the storage instance directly, you can use the
 ``storage`` property of your TinyDB instance. This may be useful to call
@@ -595,6 +640,24 @@ of these ways:
 
     # Using the close function
     db.close()
+
+.. _mypy_type_checking:
+
+MyPy Type Checking
+------------------
+
+TinyDB comes with type annotations that MyPy can use to make sure you're using
+the API correctly. Unfortunately, MyPy doesn't understand all code patterns
+that TinyDB uses. For that reason TinyDB ships a MyPy plugin that helps
+correctly type checking code that uses TinyDB. To use it, add it to the
+plugins list in the `MyPy configuration file
+<https://mypy.readthedocs.io/en/latest/config_file.html>`_
+(typically located in ``setup.cfg`` or ``mypy.ini``):
+
+.. code-block:: ini
+
+    [mypy]
+    plugins = tinydb.mypy_plugin
 
 What's next
 -----------

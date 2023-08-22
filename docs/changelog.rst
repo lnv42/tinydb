@@ -7,10 +7,210 @@ Version Numbering
 TinyDB follows the SemVer versioning guidelines. For more information,
 see `semver.org <http://semver.org/>`_
 
+.. note:: When new methods are added to the ``Query`` API, this may
+          result in breaking existing code that uses the property syntax
+          to access document fields (e.g. ``Query().some.nested.field``)
+          where the field name is equal to the newly added query method.
+          Thus, breaking changes may occur in feature releases even though
+          they don't change the public API in a backwards-incompatible
+          manner.
+
+          To prevent this from happening, one can use the dict access
+          syntax (``Query()['some']['nested']['field']``) that will
+          not break even when new methods are added to the ``Query`` API.
+
 unreleased
 ^^^^^^^^^^
 
-- *Nothing yet*
+- *nothing yet*
+
+v4.7.0 (2022-02-19)
+^^^^^^^^^^^^^^^^^^^
+
+- Feature: Allow inserting ``Document`` instances using ``Table.insert_multiple``
+  (see `pull request 455 <https://github.com/msiemens/tinydb/pull/455>`_).
+- Performance: Only convert document IDs of a table when returning documents.
+  This improves performance the ``Table.count`` and ``Table.get`` operations
+  and also for ``Table.search`` when only returning a few documents
+  (see `pull request 460 <https://github.com/msiemens/tinydb/pull/460>`_).
+- Internal change: Run all ``Table`` tests ``JSONStorage`` in addition to
+  ``MemoryStorage``.
+
+v4.6.1 (2022-01-18)
+^^^^^^^^^^^^^^^^^^^
+
+- Fix: Make using callables as queries work again
+  (see `issue 454 <https://github.com/msiemens/tinydb/issues/454>`__)
+
+v4.6.0 (2022-01-17)
+^^^^^^^^^^^^^^^^^^^
+
+- Feature: Add `map()` query operation to apply a transformation
+  to a document or field when evaluating a query
+  (see `pull request 445 <https://github.com/msiemens/tinydb/pull/445>`_).
+  **Note**: This may break code that queries for a field named ``map``
+  using the ``Query`` APIs property access syntax
+- Feature: Add support for `typing-extensions <https://pypi.org/project/typing-extensions/>`_
+  v4
+- Documentation: Fix a couple of typos in the documentation (see
+  `pull request 446 <https://github.com/msiemens/tinydb/pull/446>`_,
+  `pull request 449 <https://github.com/msiemens/tinydb/pull/449>`_ and
+  `pull request 453 <https://github.com/msiemens/tinydb/pull/453>`_)
+
+v4.5.2 (2021-09-23)
+^^^^^^^^^^^^^^^^^^^
+
+- Fix: Make ``Table.delete()``'s argument priorities consistent with
+  other table methods. This means that if you pass both ``cond`` as
+  well as ``doc_ids`` to ``Table.delete()``, the latter will be prefered
+  (see `issue 424 <https://github.com/msiemens/tinydb/issues/424>`__)
+
+v4.5.1 (2021-07-17)
+^^^^^^^^^^^^^^^^^^^
+
+- Fix: Correctly install ``typing-extensions`` on Python 3.7
+  (see `issue 413 <https://github.com/msiemens/tinydb/issues/413>`__)
+
+v4.5.0 (2021-06-25)
+^^^^^^^^^^^^^^^^^^^
+
+- Feature: Better type hinting/IntelliSense for PyCharm, VS Code and MyPy
+  (see `issue 372 <https://github.com/msiemens/tinydb/issues/372>`__).
+  PyCharm and VS Code should work out of the box, for MyPy see
+  :ref:`MyPy Type Checking <mypy_type_checking>`
+
+v4.4.0 (2021-02-11)
+^^^^^^^^^^^^^^^^^^^
+
+- Feature: Add operation for searching for all documents that match a ``dict``
+  fragment (see `issue 300 <https://github.com/msiemens/tinydb/issues/300>`_)
+- Fix: Correctly handle queries that use fields that are also Query methods,
+  e.g. ``Query()['test']`` for searching for documents with a ``test`` field
+  (see `issue 373 <https://github.com/msiemens/tinydb/issues/373>`_)
+
+v4.3.0 (2020-11-14)
+^^^^^^^^^^^^^^^^^^^
+
+- Feature: Add operation for updating multiple documents: ``update_multiple``
+  (see `issue 346 <https://github.com/msiemens/tinydb/issues/346>`_)
+- Improvement: Expose type information for MyPy typechecking (PEP 561)
+  (see `pull request 352 <https://github.com/msiemens/tinydb/pull/352>`_)
+
+v4.2.0 (2020-10-03)
+^^^^^^^^^^^^^^^^^^^
+
+- Feature: Add support for specifying document IDs during insertion
+  (see `issue 303 <https://github.com/msiemens/tinydb/issues/303>`_)
+- Internal change: Use ``OrderedDict.move_to_end()`` in the query cache
+  (see `issue 338 <https://github.com/msiemens/tinydb/issues/338>`_)
+
+v4.1.1 (2020-05-08)
+^^^^^^^^^^^^^^^^^^^
+
+- Fix: Don't install dev-dependencies when installing from PyPI (see
+  `issue 315 <https://github.com/msiemens/tinydb/issues/315>`_)
+
+v4.1.0 (2020-05-07)
+^^^^^^^^^^^^^^^^^^^
+
+- Feature: Add a no-op query ``Query().noop()`` (see
+  `issue 313 <https://github.com/msiemens/tinydb/issues/313>`_)
+- Feature: Add a ``access_mode`` flag to ``JSONStorage`` to allow opening
+  files read-only (see `issue 297 <https://github.com/msiemens/tinydb/issues/297>`_)
+- Fix: Don't drop the first document that's being inserted when inserting
+  data on an existing database (see `issue 314
+  <https://github.com/msiemens/tinydb/issues/314>`_)
+
+v4.0.0 (2020-05-02)
+^^^^^^^^^^^^^^^^^^^
+
+:ref:`Upgrade Notes <upgrade_v4_0>`
+
+Breaking Changes
+----------------
+
+- Python 2 support has been removed, see `issue 284
+  <https://github.com/msiemens/tinydb/issues/284>`_
+  for background
+- API changes:
+
+    - Removed classes: ``DataProxy``, ``StorageProxy``
+    - Attributes removed from ``TinyDB`` in favor of
+      customizing ``TinyDB``'s behavior by subclassing it and overloading
+      ``__init__(...)`` and ``table(...)``:
+
+        - ``DEFAULT_TABLE``
+        - ``DEFAULT_TABLE_KWARGS``
+        - ``DEFAULT_STORAGE``
+
+    - Arguments removed from ``TinyDB(...)``:
+
+        - ``default_table``: replace with ``TinyDB.default_table_name = 'name'``
+        - ``table_class``: replace with ``TinyDB.table_class = Class``
+
+    - ``TinyDB.contains(...)``'s ``doc_ids`` parameter has been renamed to
+      ``doc_id`` and now only takes a single document ID
+    - ``TinyDB.purge_tables(...)`` has been renamed to ``TinyDB.drop_tables(...)``
+    - ``TinyDB.purge_table(...)`` has been renamed to ``TinyDB.drop_table(...)``
+    - ``TinyDB.write_back(...)`` has been removed
+    - ``TinyDB.process_elements(...)`` has been removed
+    - ``Table.purge()`` has been renamed to ``Table.truncate()``
+    - Evaluating an empty ``Query()`` without any test operators will now result
+      in an exception, use ``Query().noop()`` (introduced in v4.1.0) instead
+
+- ``ujson`` support has been removed, see `issue 263
+  <https://github.com/msiemens/tinydb/issues/263>`_ and `issue 306
+  <https://github.com/msiemens/tinydb/issues/306>`_ for background
+- The deprecated Element ID API has been removed (e.g. using the ``Element``
+  class or ``eids`` parameter) in favor the Document API, see
+  `pull request 158 <https://github.com/msiemens/tinydb/pull/158>`_ for details
+  on the replacement
+
+Improvements
+------------
+
+- TinyDB's internal architecture has been reworked to be more simple and
+  streamlined in order to make it easier to customize TinyDB's behavior
+- With the new architecture, TinyDB performance will improve for many
+  applications
+
+Bugfixes
+--------
+
+- Don't break the tests when ``ujson`` is installed (see `issue 262
+  <https://github.com/msiemens/tinydb/issues/262>`_)
+- Fix performance when reading data (see `issue 250
+  <https://github.com/msiemens/tinydb/issues/250>`_)
+- Fix inconsistent purge function names (see `issue 103
+  <https://github.com/msiemens/tinydb/issues/103>`_)
+
+v3.15.1 (2019-10-26)
+^^^^^^^^^^^^^^^^^^^^
+
+- Internal change: fix missing values handling for ``LRUCache``
+
+v3.15.0 (2019-10-12)
+^^^^^^^^^^^^^^^^^^^^
+
+- Feature: allow setting the parameters of TinyDB's default table
+  (see `issue 278 <https://github.com/msiemens/tinydb/issues/278>`_)
+
+v3.14.2 (2019-09-13)
+^^^^^^^^^^^^^^^^^^^^
+
+- Internal change: support correct iteration for ``LRUCache`` objects
+
+v3.14.1 (2019-07-03)
+^^^^^^^^^^^^^^^^^^^^
+
+- Internal change: fix Query class to permit subclass creation
+  (see `pull request 270 <https://github.com/msiemens/tinydb/pull/270>`_)
+
+v3.14.0 (2019-06-18)
+^^^^^^^^^^^^^^^^^^^^
+
+- Change: support for ``ujson`` is now deprecated
+  (see `issue 263 <https://github.com/msiemens/tinydb/issues/263>`_)
 
 v3.13.0 (2019-03-16)
 ^^^^^^^^^^^^^^^^^^^^

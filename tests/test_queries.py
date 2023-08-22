@@ -1,5 +1,7 @@
-import pytest
 import re
+
+import pytest
+
 from tinydb.queries import Query, where
 
 
@@ -8,16 +10,16 @@ def test_no_path():
         _ = Query() == 2
 
 
-def test_path_only():
-    query = Query()['value']
-    assert query == where('value')
+def test_path_exists():
+    query = Query()['value'].exists()
+    assert query == where('value').exists()
     assert query({'value': 1})
     assert not query({'something': 1})
     assert hash(query)
     assert hash(query) != hash(where('asd'))
 
-    query = Query()['value']['val']
-    assert query == where('value')['val']
+    query = Query()['value']['val'].exists()
+    assert query == where('value')['val'].exists()
     assert query({'value': {'val': 2}})
     assert not query({'value': 1})
     assert not query({'value': {'asd': 1}})
@@ -27,12 +29,25 @@ def test_path_only():
 
 
 def test_path_and():
-    query = Query()['value'] & (Query()['value'] == 5)
+    query = Query()['value'].exists() & (Query()['value'] == 5)
     assert query({'value': 5})
     assert not query({'value': 10})
     assert not query({'something': 1})
     assert hash(query)
     assert hash(query) != hash(where('value'))
+
+
+def test_callable_in_path_with_map():
+    double = lambda x: x + x
+    query = Query().value.map(double) == 10
+    assert query({'value': 5})
+    assert not query({'value': 10})
+
+
+def test_callable_in_path_with_chain():
+    rekey = lambda x: {'y': x['a'], 'z': x['b']}
+    query = Query().map(rekey).z == 10
+    assert query({'a': 5, 'b': 10})
 
 
 def test_eq():
@@ -93,8 +108,8 @@ def test_ge():
 
 def test_or():
     query = (
-        (Query().val1 == 1) |
-        (Query().val2 == 2)
+            (Query().val1 == 1) |
+            (Query().val2 == 2)
     )
     assert query({'val1': 1})
     assert query({'val2': 2})
@@ -105,8 +120,8 @@ def test_or():
 
 def test_and():
     query = (
-        (Query().val1 == 1) &
-        (Query().val2 == 2)
+            (Query().val1 == 1) &
+            (Query().val2 == 2)
     )
     assert query({'val1': 1, 'val2': 2})
     assert not query({'val1': 1})
@@ -122,8 +137,8 @@ def test_not():
     assert hash(query)
 
     query = (
-        (~ (Query().val1 == 1)) &
-        (Query().val2 == 2)
+            (~ (Query().val1 == 1)) &
+            (Query().val2 == 2)
     )
     assert query({'val1': '', 'val2': 2})
     assert query({'val2': 2})
@@ -147,6 +162,8 @@ def test_regex():
     assert query({'val': '42.'})
     assert not query({'val': '44'})
     assert not query({'val': 'ab.'})
+    assert not query({'val': 155})
+    assert not query({'val': False})
     assert not query({'': None})
     assert hash(query)
 
@@ -155,6 +172,7 @@ def test_regex():
     assert query({'val': 'ab3'})
     assert not query({'val': 'abc'})
     assert not query({'val': ''})
+    assert not query({'val': True})
     assert not query({'': None})
     assert hash(query)
 
@@ -162,6 +180,7 @@ def test_regex():
     assert query({'val': 'john'})
     assert query({'val': 'xJohNx'})
     assert not query({'val': 'JOH'})
+    assert not query({'val': 12})
     assert not query({'': None})
     assert hash(query)
 
@@ -363,3 +382,64 @@ def test_repr():
 
     assert repr(Fruit) == "Query()"
     assert repr(Fruit.type == 'peach') == "QueryImpl('==', ('type',), 'peach')"
+
+
+def test_subclass():
+    # Test that a new query test method in a custom subclass is properly usable
+    class MyQueryClass(Query):
+        def equal_double(self, rhs):
+            return self._generate_test(
+                lambda value: value == rhs * 2,
+                ('equal_double', self._path, rhs)
+            )
+
+    query = MyQueryClass().val.equal_double('42')
+
+    assert query({'val': '4242'})
+    assert not query({'val': '42'})
+    assert not query({'': None})
+    assert hash(query)
+
+
+def test_noop():
+    query = Query().noop()
+
+    assert query({'foo': True})
+    assert query({'foo': None})
+    assert query({})
+
+
+def test_equality():
+    q = Query()
+    assert (q.foo == 2) != 0
+    assert (q.foo == 'yes') != ''
+
+
+def test_empty_query_error():
+    with pytest.raises(RuntimeError, match='Empty query was evaluated'):
+        Query()({})
+
+
+def test_fragment():
+    query = Query().fragment({'a': 4, 'b': True})
+
+    assert query({'a': 4, 'b': True, 'c': 'yes'})
+    assert not query({'a': 4, 'c': 'yes'})
+    assert not query({'b': True, 'c': 'yes'})
+    assert not query({'a': 5, 'b': True, 'c': 'yes'})
+    assert not query({'a': 4, 'b': 'no', 'c': 'yes'})
+
+
+def test_fragment_with_path():
+    query = Query().doc.fragment({'a': 4, 'b': True})
+
+    assert query({'doc': {'a': 4, 'b': True, 'c': 'yes'}})
+    assert not query({'a': 4, 'b': True, 'c': 'yes'})
+    assert not query({'doc': {'a': 4, 'c': 'yes'}})
+
+
+def test_get_item():
+    query = Query()['test'] == 1
+
+    assert query({'test': 1})
+    assert not query({'test': 0})
